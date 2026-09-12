@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "bcquarryfluids",
+  "version": "${version}",
+  "name": "BuildCraft Quarry Extras",
+  "description": "Add-on for BuildCraft Refabricated: the quarry mines fluids away (into a multi-fluid tank or the void), gets its own inventory, a GUI and slots for Refined Storage fortune / silk touch upgrades.",
+  "authors": [
+    "David Hermann"
+  ],
+  "contact": {
+    "sources": "https://github.com/david-stefan-hermann/bc-quarry-fluids"
+  },
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "bcquarryfluids.BcQuarryFluids"
+    ],
+    "client": [
+      "bcquarryfluids.client.BcQuarryFluidsClient"
+    ]
+  },
+  "mixins": [
+    "bcquarryfluids.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "buildcraftrefabricated": "*"
+  },
+  "suggests": {
+    "refinedstorage": "*"
+  }
+}

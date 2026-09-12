@@ -1,0 +1,59 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version '1.17.0-alpha.7'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+repositories {
+    // BuildCraft Refabricated is not on a maven; it is compiled against from libs/ (see gradle.properties).
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // 26.x mods use Mojang names directly, so a plain file dependency is enough to compile.
+    compileOnly files(project.buildcraft_jar)
+    // Put BuildCraft on the dev runtime classpath so runServer/runClient load it (not bundled into our jar).
+    localRuntime files(project.buildcraft_jar)
+    // Optional extra mods for dev testing (Refined Storage for the upgrade items); ignored when absent.
+    fileTree(dir: 'libs', include: ['refinedstorage-*.jar', 'cloth-config-*.jar']).each { f ->
+        localRuntime files(f)
+    }
+}
+
+processResources {
+    inputs.property "version", project.version
+    inputs.property "loader_version", project.loader_version
+    filteringCharset "UTF-8"
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version,
+                "loader_version": project.loader_version
+    }
+}
+
+def targetJavaVersion = 25
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = "UTF-8"
+    it.options.release = targetJavaVersion
+}
+
+base {
+    archivesName = project.archives_base_name
+}
+
+java {
+    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+    if (JavaVersion.current() < javaVersion) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+}
+
+jar {
+    from("LICENSE") {
+        rename { "${it}_${project.archives_base_name}" }
+    }
+}

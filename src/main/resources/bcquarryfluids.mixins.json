@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "bcquarryfluids.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BCBuildersFabricMixin",
+    "BlockEntityMixin",
+    "TileQuarryAccessor",
+    "TileQuarryMixin",
+    "TaskBreakBlockMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
