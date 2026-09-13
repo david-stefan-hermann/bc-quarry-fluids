@@ -17,12 +17,13 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * Layout in GUI pixels (origin = top-left of the main panel, which is the vanilla 176 x 166 dispenser size):
- * 3 x 3 quarry inventory at (8, 17), tank reservoirs to its right, player inventory at y 84. The four upgrade slots
+ * 3 x 3 quarry inventory at (8, 17), tank gauges to its right, player inventory at y 98. The four upgrade slots
  * sit in a separate side panel attached to the right edge, exactly where Refined Storage puts them (x 187, y 6 + 18 i).
  */
 public class QuarryMenu extends AbstractContainerMenu {
     public static final int MAIN_WIDTH = 176;
-    public static final int MAIN_HEIGHT = 166;
+    /** 180 like BuildCraft's tank screen: leaves room between the 64 px gauges and the player inventory. */
+    public static final int MAIN_HEIGHT = 180;
     public static final int SIDE_X = 180;
     public static final int SIDE_WIDTH = 30;
     public static final int SIDE_HEIGHT = 82;
@@ -37,7 +38,7 @@ public class QuarryMenu extends AbstractContainerMenu {
     public static final int TANK_WIDTH = 100;
     /** Same height as BuildCraft's own tank gauge (its overlay is 16 x 64). */
     public static final int TANK_HEIGHT = 64;
-    public static final int PLAYER_Y = 84;
+    public static final int PLAYER_Y = 98;
 
     public final QuarryMenuData data;
     private final Container inventory;

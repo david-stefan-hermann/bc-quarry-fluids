@@ -15,14 +15,15 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Draws everything with plain rectangles, so no texture is needed: the dispenser-sized main panel with the 3 x 3
- * grid and BuildCraft-style tank gauges, plus the Refined-Storage-style upgrade side panel on the right. Panel
- * corners follow the vanilla container texture pixel for pixel (transparent corner, 1 px black border, 2 px
- * highlight / shadow).
+ * Draws everything with plain rectangles, so no texture is needed: the main panel with the 3 x 3 grid and
+ * BuildCraft-style tank gauges, plus the Refined-Storage-style upgrade side panel on the right. Panel corners follow
+ * the vanilla container texture pixel for pixel. The gauges are holes in the panel: the (dimmed) world shows through
+ * a translucent dark tint, the fluid level and BuildCraft's tick scale are drawn on top.
  */
 public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
     private static final int PANEL = 0xFFC6C6C6;
@@ -31,11 +32,24 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
     private static final int SHADOW = 0xFF555555;
     private static final int LIGHT = 0xFFFFFFFF;
     private static final int SLOT = 0xFF8B8B8B;
-    private static final int TICK = 0xFF000000;
+    private static final int GAUGE_TINT = 0x70000000;
+    private static final int GAUGE_FRAME = 0xFF373737;
+    private static final int TICK = 0xFFE8E8E8;
     private static final int GAUGE_MAX_WIDTH = 16;
+
+    /** Left edge of each gauge relative to the panel, computed once from the slot count. */
+    private final int[] gaugeX;
+    private final int gaugeWidth;
 
     public QuarryScreen(QuarryMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title, QuarryMenu.TOTAL_WIDTH, QuarryMenu.MAIN_HEIGHT);
+        int slots = Math.max(1, menu.data.fluidSlots());
+        gaugeWidth = Math.min(GAUGE_MAX_WIDTH, (QuarryMenu.TANK_WIDTH - 4 * (slots - 1)) / slots);
+        int gap = slots > 1 ? (QuarryMenu.TANK_WIDTH - gaugeWidth * slots) / (slots - 1) : 0;
+        gaugeX = new int[slots];
+        for (int i = 0; i < slots; i++) {
+            gaugeX[i] = QuarryMenu.TANK_X + i * (gaugeWidth + gap);
+        }
     }
 
     @Override
@@ -70,8 +84,13 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractBackground(graphics, mouseX, mouseY, partialTick);
-        drawPanel(graphics, leftPos, topPos, QuarryMenu.MAIN_WIDTH, QuarryMenu.MAIN_HEIGHT);
-        drawPanel(graphics, leftPos + QuarryMenu.SIDE_X, topPos, QuarryMenu.SIDE_WIDTH, QuarryMenu.SIDE_HEIGHT);
+
+        List<int[]> holes = new ArrayList<>();
+        for (int gx : gaugeX) {
+            holes.add(new int[]{leftPos + gx, topPos + QuarryMenu.TANK_Y, leftPos + gx + gaugeWidth, topPos + QuarryMenu.TANK_Y + QuarryMenu.TANK_HEIGHT});
+        }
+        drawPanel(graphics, leftPos, topPos, QuarryMenu.MAIN_WIDTH, QuarryMenu.MAIN_HEIGHT, holes);
+        drawPanel(graphics, leftPos + QuarryMenu.SIDE_X, topPos, QuarryMenu.SIDE_WIDTH, QuarryMenu.SIDE_HEIGHT, List.of());
 
         List<Component> tooltip = null;
         for (Slot slot : menu.slots) {
@@ -92,31 +111,33 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
         }
     }
 
-    /** One BuildCraft-style vertical gauge per tank slot, spread over the area right of the item grid. */
+    /** One BuildCraft-style vertical gauge per tank slot in the holes left open by the panel. */
     private List<Component> drawGauges(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        int slots = menu.data.fluidSlots();
         int capacity = Math.max(1, menu.data.capacityMb());
-        int gaugeW = Math.min(GAUGE_MAX_WIDTH, (QuarryMenu.TANK_WIDTH - 4 * (slots - 1)) / slots);
-        int gap = slots > 1 ? (QuarryMenu.TANK_WIDTH - gaugeW * slots) / (slots - 1) : 0;
         int gaugeH = QuarryMenu.TANK_HEIGHT;
         List<Component> tooltip = null;
 
-        for (int i = 0; i < slots; i++) {
-            int x = leftPos + QuarryMenu.TANK_X + i * (gaugeW + gap);
+        for (int i = 0; i < gaugeX.length; i++) {
+            int x = leftPos + gaugeX[i];
             int y = topPos + QuarryMenu.TANK_Y;
             int fluidId = menu.tankFluidId(i);
             int amount = menu.tankAmountMb(i);
             Fluid fluid = fluidId < 0 ? Fluids.EMPTY : BuiltInRegistries.FLUID.byId(fluidId);
             boolean filled = fluid != Fluids.EMPTY && amount > 0;
 
-            // fluid level on the bare panel (no frame, no background), BuildCraft's scale on top of it
+            // translucent tint over the world, a thin frame, the fluid level, BuildCraft's scale on top
+            graphics.fill(x, y, x + gaugeWidth, y + gaugeH, GAUGE_TINT);
+            graphics.fill(x - 1, y - 1, x + gaugeWidth + 1, y, GAUGE_FRAME);
+            graphics.fill(x - 1, y + gaugeH, x + gaugeWidth + 1, y + gaugeH + 1, GAUGE_FRAME);
+            graphics.fill(x - 1, y, x, y + gaugeH, GAUGE_FRAME);
+            graphics.fill(x + gaugeWidth, y, x + gaugeWidth + 1, y + gaugeH, GAUGE_FRAME);
             if (filled) {
                 int level = Math.max(1, Math.min(gaugeH, (int) ((long) gaugeH * amount / capacity)));
-                graphics.fill(x, y + gaugeH - level, x + gaugeW, y + gaugeH, fluidColor(fluid));
+                graphics.fill(x, y + gaugeH - level, x + gaugeWidth, y + gaugeH, fluidColor(fluid));
             }
-            drawScale(graphics, x, y, gaugeH, gaugeW);
+            drawScale(graphics, x, y, gaugeH, gaugeWidth);
 
-            if (mouseX >= x && mouseX < x + gaugeW && mouseY >= y && mouseY < y + gaugeH) {
+            if (mouseX >= x && mouseX < x + gaugeWidth && mouseY >= y && mouseY < y + gaugeH) {
                 tooltip = filled
                     ? List.of(FluidVariantAttributes.getName(FluidVariant.of(fluid)), Component.literal(amount + " / " + capacity + " mB"))
                     : List.of(Component.translatable("gui.bcquarryfluids.tank_empty"), Component.literal("0 / " + capacity + " mB"));
@@ -126,8 +147,8 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
     }
 
     /**
-     * BuildCraft's tank overlay, redrawn in black: a tick every 4 px, 5 px long; 8 px at the quarter marks,
-     * the full width at the half mark and 7 px at the top.
+     * BuildCraft's tank overlay: a tick every 4 px, 5 px long; 8 px at the quarter marks, the full width at the half
+     * mark and 7 px at the top.
      */
     private static void drawScale(GuiGraphicsExtractor graphics, int x, int y, int height, int width) {
         for (int row = 0; row < height; row += 4) {
@@ -145,10 +166,14 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
         }
     }
 
-    /** Vanilla container panel: transparent corner pixels, 1 px black border, 2 px white highlight, 2 px shadow. */
-    private static void drawPanel(GuiGraphicsExtractor graphics, int x0, int y0, int w, int h) {
+    /**
+     * Vanilla container panel: transparent corner pixels, 1 px black border, 2 px white highlight, 2 px shadow.
+     * {@code holes} (absolute x0, y0, x1, y1; all in one horizontal band) are left unpainted.
+     */
+    private static void drawPanel(GuiGraphicsExtractor graphics, int x0, int y0, int w, int h, List<int[]> holes) {
         int x1 = x0 + w;
         int y1 = y0 + h;
+        fillExcept(graphics, x0 + 1, y0 + 1, x1 - 1, y1 - 1, holes);
         // border (corners left out: the two outermost pixels of each corner stay transparent)
         graphics.fill(x0 + 2, y0, x1 - 2, y0 + 1, BORDER);
         graphics.fill(x0 + 2, y1 - 1, x1 - 2, y1, BORDER);
@@ -158,9 +183,6 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
         graphics.fill(x1 - 2, y0 + 1, x1 - 1, y0 + 2, BORDER);
         graphics.fill(x0 + 1, y1 - 2, x0 + 2, y1 - 1, BORDER);
         graphics.fill(x1 - 2, y1 - 2, x1 - 1, y1 - 1, BORDER);
-        // face
-        graphics.fill(x0 + 2, y0 + 1, x1 - 2, y1 - 1, PANEL);
-        graphics.fill(x0 + 1, y0 + 2, x1 - 1, y1 - 2, PANEL);
         // highlight: two rows at the top, two columns on the left, with the vanilla inner rounding
         graphics.fill(x0 + 2, y0 + 1, x1 - 3, y0 + 2, LIGHT);
         graphics.fill(x0 + 1, y0 + 2, x1 - 3, y0 + 3, LIGHT);
@@ -171,6 +193,24 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
         graphics.fill(x0 + 3, y1 - 3, x1 - 1, y1 - 2, SHADOW);
         graphics.fill(x1 - 3, y0 + 3, x1 - 1, y1 - 3, SHADOW);
         graphics.fill(x1 - 4, y1 - 4, x1 - 3, y1 - 3, SHADOW);
+    }
+
+    /** Fills a rectangle with the panel colour, skipping the given holes (which must share one y range). */
+    private static void fillExcept(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1, List<int[]> holes) {
+        if (holes.isEmpty()) {
+            graphics.fill(x0, y0, x1, y1, PANEL);
+            return;
+        }
+        int bandTop = holes.get(0)[1];
+        int bandBottom = holes.get(0)[3];
+        graphics.fill(x0, y0, x1, bandTop, PANEL);
+        graphics.fill(x0, bandBottom, x1, y1, PANEL);
+        int cursor = x0;
+        for (int[] hole : holes) {
+            graphics.fill(cursor, bandTop, hole[0], bandBottom, PANEL);
+            cursor = hole[2];
+        }
+        graphics.fill(cursor, bandTop, x1, bandBottom, PANEL);
     }
 
     private static void drawSlot(GuiGraphicsExtractor graphics, int x, int y) {
