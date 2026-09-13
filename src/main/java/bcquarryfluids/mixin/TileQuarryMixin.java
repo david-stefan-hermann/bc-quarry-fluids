@@ -7,6 +7,8 @@ import bcquarryfluids.QuarryExtras;
 import buildcraft.builders.tile.TileQuarry;
 import buildcraft.lib.fabric.transfer.NeighborTransfers;
 import buildcraft.lib.misc.BlockUtil;
+import buildcraft.lib.misc.data.Box;
+import buildcraft.lib.misc.data.BoxIterator;
 import buildcraft.lib.nbt.BcValueIn;
 import buildcraft.lib.nbt.BcValueOut;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
@@ -23,6 +25,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -115,6 +118,66 @@ public abstract class TileQuarryMixin implements QuarryExtras {
         if (level != null && level.getBlockState(pos).getBlock() instanceof LiquidBlock) {
             cir.setReturnValue(false);
         }
+    }
+
+    /** A minable block sitting above the iterator's current column (placed after that layer was mined). */
+    @Unique
+    private BlockPos bcqf$blocker;
+
+    /**
+     * Upstream skips a column entirely when something above the current block is in the way
+     * ({@code canMoveDownTo} fails, iterator advances). Instead, take the topmost minable block of that column
+     * as the next target, so blocks placed on an already mined layer are removed before the drill goes deeper.
+     */
+    @Inject(method = "advancePastNonWorkableBlocks", at = @At("HEAD"), cancellable = true)
+    private void bcqf$mineBlockersFirst(CallbackInfo ci) {
+        TileQuarryAccessor self = (TileQuarryAccessor) this;
+        BoxIterator iterator = self.bcqf$getBoxIterator();
+        if (iterator == null) {
+            return;
+        }
+        ci.cancel();
+        if (bcqf$blocker != null) {
+            if (!self.bcqf$canMoveThrough(bcqf$blocker) && self.bcqf$canMine(bcqf$blocker)) {
+                return; // still there, keep working on it
+            }
+            bcqf$blocker = null;
+        }
+        Box box = self.bcqf$getMiningBox();
+        while (iterator.hasNext()) {
+            BlockPos current = iterator.getCurrent();
+            if (self.bcqf$canMoveThrough(current) || !self.bcqf$canMine(current)) {
+                iterator.advance();
+                continue;
+            }
+            BlockPos blocker = bcqf$topmostBlocker(self, box, current);
+            if (blocker == null) {
+                return; // column is clear, current block is the next target
+            }
+            if (self.bcqf$canMine(blocker)) {
+                bcqf$blocker = blocker;
+                return;
+            }
+            iterator.advance(); // unbreakable block above: skip the column like upstream does
+        }
+    }
+
+    @Unique
+    private static BlockPos bcqf$topmostBlocker(TileQuarryAccessor self, Box box, BlockPos current) {
+        int top = box != null && box.isInitialized() ? box.max().getY() : current.getY();
+        for (int y = top; y > current.getY(); y--) {
+            BlockPos pos = new BlockPos(current.getX(), y, current.getZ());
+            if (!self.bcqf$canMoveThrough(pos)) {
+                return pos;
+            }
+        }
+        return null;
+    }
+
+    /** While a blocker is pending, every use of the iterator position in {@code tick} targets the blocker instead. */
+    @Redirect(method = "tick", at = @At(value = "INVOKE", target = "Lbuildcraft/lib/misc/data/BoxIterator;getCurrent()Lnet/minecraft/core/BlockPos;"))
+    private BlockPos bcqf$currentOrBlocker(BoxIterator iterator) {
+        return bcqf$blocker != null ? bcqf$blocker : iterator.getCurrent();
     }
 
     /** Push collected fluid into neighbouring pipes and tanks every tick, like the BuildCraft pump does. */

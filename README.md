@@ -12,7 +12,8 @@ Fabric add-on for [BuildCraft Refabricated](https://modrinth.com/mod/buildcraftr
 - **Multi-fluid tank.** In `COLLECT` mode every source block yields one bucket into the quarry's tank (default 6 slots x 16 buckets, one fluid per slot). The tank pushes into adjacent fluid pipes and tanks every tick and can be pulled from by any Fabric Transfer API consumer (Refined Storage importer, external storage, ...). When the tank is full the quarry waits on that block, like the BuildCraft pump. `VOID` mode deletes the fluid instead; `IGNORE` restores upstream behaviour.
 - **Own inventory.** Mined items land in the quarry's 3 x 3 inventory first. Only the overflow goes to neighbours or the ground as before. Pipes and importers can extract from the quarry.
 - **Upgrade slots.** Four slots in a Refined-Storage-style side panel accept RS's `fortune_1/2/3_upgrade` and `silk_touch_upgrade`. The highest fortune level (or silk touch, which wins) is applied to every block the quarry breaks.
-- **GUI.** Right-click the quarry with an empty hand: dispenser-sized panel with the 3 x 3 inventory, one reservoir per tank slot to its right (hover for fluid and amount), upgrade slots top right. Shift-click moves items, upgrades jump into the upgrade slots.
+- **GUI.** Right-click the quarry (any item except a BuildCraft wrench): the 3 x 3 inventory, one BuildCraft-style gauge per tank slot showing the fluid's real texture (hover for name and amount), upgrade slots in the side panel. Shift-click moves items, upgrades jump into the upgrade slots.
+- **No skipped columns.** Upstream skips a whole column when a block was placed above it after that layer was mined. The add-on mines that block first, then continues downwards.
 
 Breaking the quarry drops the inventory and the upgrades; fluid in the tank is lost.
 

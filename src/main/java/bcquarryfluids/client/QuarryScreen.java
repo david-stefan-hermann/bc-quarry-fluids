@@ -32,7 +32,7 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
     private static final int SHADOW = 0xFF555555;
     private static final int LIGHT = 0xFFFFFFFF;
     private static final int SLOT = 0xFF8B8B8B;
-    private static final int GAUGE_TINT = 0x70000000;
+    private static final int GAUGE_TINT = 0x40000000;
     private static final int GAUGE_FRAME = 0xFF373737;
     private static final int TICK = 0xFFE8E8E8;
     private static final int GAUGE_MAX_WIDTH = 16;
@@ -133,7 +133,7 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
             graphics.fill(x + gaugeWidth, y, x + gaugeWidth + 1, y + gaugeH, GAUGE_FRAME);
             if (filled) {
                 int level = Math.max(1, Math.min(gaugeH, (int) ((long) gaugeH * amount / capacity)));
-                graphics.fill(x, y + gaugeH - level, x + gaugeWidth, y + gaugeH, fluidColor(fluid));
+                drawFluid(graphics, fluid, x, y + gaugeH - level, gaugeWidth, level);
             }
             drawScale(graphics, x, y, gaugeH, gaugeWidth);
 
@@ -219,6 +219,28 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
         graphics.fill(x, y, x + 1, y + 17, SLOT_DARK);
         graphics.fill(x + 1, y + 17, x + 18, y + 18, LIGHT);
         graphics.fill(x + 17, y + 1, x + 18, y + 18, LIGHT);
+    }
+
+    /**
+     * Tiles the fluid's real still texture (with its tint, e.g. biome water colour) into the rectangle, using
+     * BuildCraft's appearance cache so mod fluids look exactly like in BuildCraft's own tanks. Falls back to the
+     * map colour when the fluid has no sprite.
+     */
+    private void drawFluid(GuiGraphicsExtractor graphics, Fluid fluid, int x, int y, int width, int height) {
+        buildcraft.lib.client.fluid.BcFluidAppearance appearance = buildcraft.lib.client.fluid.BcFluidAppearanceCache.get(fluid);
+        if (appearance == null || appearance.sprite() == null) {
+            graphics.fill(x, y, x + width, y + height, fluidColor(fluid));
+            return;
+        }
+        int tint = 0xFF000000 | appearance.tint();
+        graphics.enableScissor(x, y, x + width, y + height);
+        // tiles are anchored to the bottom so the texture does not shift while the level rises
+        for (int tileY = y + height - 16; tileY > y - 16; tileY -= 16) {
+            for (int tileX = x; tileX < x + width; tileX += 16) {
+                graphics.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, appearance.sprite(), tileX, tileY, 16, 16, tint);
+            }
+        }
+        graphics.disableScissor();
     }
 
     /** Map colour of the fluid's block (water blue, lava orange, oil black ...) as an opaque ARGB value. */
