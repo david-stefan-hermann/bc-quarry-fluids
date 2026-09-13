@@ -19,7 +19,6 @@ import java.util.Locale;
  *   <li>{@code mode}: IGNORE / VOID / COLLECT</li>
  *   <li>{@code tankCapacityMb}: capacity of each fluid slot of the quarry tank</li>
  *   <li>{@code fluidSlots}: how many different fluids the tank holds at once (1-8)</li>
- *   <li>{@code inventoryRows}: rows of 9 slots in the quarry inventory (4-9)</li>
  * </ul>
  */
 public final class Config {
@@ -29,7 +28,6 @@ public final class Config {
     private static volatile FluidMode mode = FluidMode.COLLECT;
     private static volatile int tankCapacityMb = 16000;
     private static volatile int fluidSlots = 6;
-    private static volatile int inventoryRows = 6;
 
     private Config() {
     }
@@ -44,10 +42,6 @@ public final class Config {
 
     public static int fluidSlots() {
         return fluidSlots;
-    }
-
-    public static int inventoryRows() {
-        return inventoryRows;
     }
 
     public static void load() {
@@ -70,11 +64,10 @@ public final class Config {
             }
             tankCapacityMb = clamp(root, "tankCapacityMb", tankCapacityMb, 1000, 1_000_000);
             fluidSlots = clamp(root, "fluidSlots", fluidSlots, 1, 8);
-            inventoryRows = clamp(root, "inventoryRows", inventoryRows, 4, 9);
         } catch (Exception e) {
             BcQuarryFluids.LOGGER.error("Failed to read {}, using defaults", path, e);
         }
-        BcQuarryFluids.LOGGER.info("Quarry fluid mode: {}, {} x {} mB tank slots, {} inventory rows", mode, fluidSlots, tankCapacityMb, inventoryRows);
+        BcQuarryFluids.LOGGER.info("Quarry fluid mode: {}, {} x {} mB tank slots", mode, fluidSlots, tankCapacityMb);
     }
 
     private static int clamp(JsonObject root, String key, int fallback, int min, int max) {
@@ -87,11 +80,10 @@ public final class Config {
     private static void write(Path path) {
         JsonObject root = new JsonObject();
         root.addProperty("_comment", "mode: IGNORE (leave fluids like upstream), VOID (delete them), COLLECT (fill the quarry tank, pushed to adjacent pipes/tanks). "
-            + "tankCapacityMb per fluid slot, fluidSlots 1-8, inventoryRows 4-9 (9 needs GUI scale 3 or lower).");
+            + "tankCapacityMb per fluid slot, fluidSlots 1-8.");
         root.addProperty("mode", mode.name());
         root.addProperty("tankCapacityMb", tankCapacityMb);
         root.addProperty("fluidSlots", fluidSlots);
-        root.addProperty("inventoryRows", inventoryRows);
         try {
             Files.createDirectories(path.getParent());
             try (Writer writer = Files.newBufferedWriter(path)) {

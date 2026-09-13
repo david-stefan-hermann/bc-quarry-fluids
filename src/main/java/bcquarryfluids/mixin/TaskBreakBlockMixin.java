@@ -8,7 +8,6 @@ import bcquarryfluids.Upgrades;
 import buildcraft.builders.tile.TileQuarry;
 import buildcraft.lib.fluid.stack.FluidStack;
 import buildcraft.lib.misc.BlockUtil;
-import buildcraft.lib.misc.data.Box;
 import com.mojang.authlib.GameProfile;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
@@ -23,6 +22,7 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.FluidState;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -39,10 +39,10 @@ import java.util.Optional;
 /**
  * Two jobs when a break task completes:
  * <ol>
- *   <li>Fluid blocks: drain the whole mining layer at once. Removing them one by one never finishes, because two
- *       neighbouring source blocks re-create a source in the gap (vanilla "infinite water"). Sources are worth one
- *       bucket; in COLLECT mode that bucket goes into the quarry tank, and if it does not fit the task reports
- *       failure without advancing, so the quarry retries until the tank is emptied (like the BuildCraft pump).</li>
+ *   <li>Fluid blocks: the block under the drill is removed, one at a time like any other block. A source block is
+ *       worth one bucket; in COLLECT mode that bucket goes into the quarry tank, and if it does not fit the task
+ *       reports failure without advancing, so the quarry retries until the tank is emptied (like the BuildCraft
+ *       pump). Flowing fluid is just cleared.</li>
  *   <li>Solid blocks: the pickaxe BuildCraft breaks with gets the fortune / silk touch level of the installed
  *       Refined Storage upgrades, and the drops go into the quarry inventory before anything reaches neighbours.</li>
  * </ol>
@@ -70,45 +70,16 @@ public abstract class TaskBreakBlockMixin {
         quarry.bcqf$setBlockPercentSoFar(quarry.bcqf$getBlockPercentSoFar() + (double) added / target);
         level.destroyBlockProgress(breakPos.hashCode(), breakPos, -1);
 
-        bcqf$drainLayer(level, quarry.bcqf$getMiningBox(), breakPos.getY());
-
-        if (level.getBlockState(breakPos).getBlock() instanceof LiquidBlock) {
+        FluidState fluidState = level.getFluidState(breakPos);
+        if (Config.mode() == FluidMode.COLLECT && fluidState.isSource() && !bcqf$collect(fluidState.getType(), FluidConstants.BUCKET)) {
             // Tank full (or holds other fluids): do not advance, upstream refunds the power, retry next tick.
             cir.setReturnValue(false);
             return;
         }
+        level.setBlock(breakPos, Blocks.AIR.defaultBlockState(), 3);
         quarry.bcqf$check(breakPos);
         quarry.bcqf$advanceMiningIteratorPast(breakPos);
         cir.setReturnValue(true);
-    }
-
-    /** Clears every fluid block of one Y layer inside the mining box in a single tick. */
-    private void bcqf$drainLayer(ServerLevel level, Box box, int y) {
-        if (box == null || !box.isInitialized()) {
-            bcqf$removeFluid(level, breakPos);
-            return;
-        }
-        BlockPos min = box.min();
-        BlockPos max = box.max();
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        for (int x = min.getX(); x <= max.getX(); x++) {
-            for (int z = min.getZ(); z <= max.getZ(); z++) {
-                pos.set(x, y, z);
-                if (level.getBlockState(pos).getBlock() instanceof LiquidBlock) {
-                    bcqf$removeFluid(level, pos.immutable());
-                }
-            }
-        }
-    }
-
-    /** @return true if the block was cleared (false only when a source could not be stored in COLLECT mode) */
-    private boolean bcqf$removeFluid(ServerLevel level, BlockPos pos) {
-        FluidState fluidState = level.getFluidState(pos);
-        if (Config.mode() == FluidMode.COLLECT && fluidState.isSource() && !bcqf$collect(fluidState.getType(), FluidConstants.BUCKET)) {
-            return false;
-        }
-        level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
-        return true;
     }
 
     /** Breaking a waterlogged block (kelp, seagrass, slabs ...) leaves its water behind; take that too. */
@@ -128,7 +99,7 @@ public abstract class TaskBreakBlockMixin {
     }
 
     /** @return true if the whole amount was stored in the quarry tank */
-    private boolean bcqf$collect(net.minecraft.world.level.material.Fluid fluid, long droplets) {
+    private boolean bcqf$collect(Fluid fluid, long droplets) {
         MultiFluidTank tank = ((QuarryExtras) this$0).bcqf$getTank();
         try (Transaction transaction = Transaction.openOuter()) {
             if (tank.insert(FluidVariant.of(fluid), droplets, transaction) < droplets) {

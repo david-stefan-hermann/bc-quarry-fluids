@@ -1,3 +1,5 @@
 {
-  "gui.bcquarryfluids.tank_empty": "Empty"
+  "gui.bcquarryfluids.tank_empty": "Empty",
+  "gui.bcquarryfluids.upgrade_slot": "Upgrade slot",
+  "gui.bcquarryfluids.upgrade_slot.hint": "Refined Storage Fortune I-III or Silk Touch upgrade"
 }

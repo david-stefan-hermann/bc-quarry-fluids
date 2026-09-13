@@ -1,3 +1,5 @@
 {
-  "gui.bcquarryfluids.tank_empty": "Leer"
+  "gui.bcquarryfluids.tank_empty": "Leer",
+  "gui.bcquarryfluids.upgrade_slot": "Upgrade-Slot",
+  "gui.bcquarryfluids.upgrade_slot.hint": "Refined-Storage-Upgrade: Glück I-III oder Behutsamkeit"
 }

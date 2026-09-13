@@ -1,7 +1,6 @@
 package bcquarryfluids.mixin;
 
 import buildcraft.builders.tile.TileQuarry;
-import buildcraft.lib.misc.data.Box;
 import net.minecraft.core.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
@@ -20,7 +19,4 @@ public interface TileQuarryAccessor {
 
     @Accessor("blockPercentSoFar")
     void bcqf$setBlockPercentSoFar(double value);
-
-    @Accessor("miningBox")
-    Box bcqf$getMiningBox();
 }

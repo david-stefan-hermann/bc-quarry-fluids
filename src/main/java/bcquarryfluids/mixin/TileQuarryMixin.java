@@ -39,6 +39,7 @@ public abstract class TileQuarryMixin implements QuarryExtras {
     private static final String TANK_KEY = "bcqf_tank";
     private static final String ITEMS_KEY = "bcqf_items";
     private static final String UPGRADES_KEY = "bcqf_upgrades";
+    private static final int INVENTORY_SLOTS = 9;
 
     @Unique
     private MultiFluidTank bcqf$tank;
@@ -59,7 +60,7 @@ public abstract class TileQuarryMixin implements QuarryExtras {
     @Override
     public SimpleContainer bcqf$getInventory() {
         if (bcqf$inventory == null) {
-            bcqf$inventory = bcqf$container(Config.inventoryRows() * 9);
+            bcqf$inventory = bcqf$container(INVENTORY_SLOTS);
         }
         return bcqf$inventory;
     }
@@ -143,7 +144,18 @@ public abstract class TileQuarryMixin implements QuarryExtras {
     @Inject(method = "readData", at = @At("TAIL"))
     private void bcqf$readExtras(BcValueIn input, CallbackInfo ci) {
         input.read(TANK_KEY, MultiFluidTank.Entry.LIST_CODEC).ifPresent(entries -> bcqf$getTank().read(input, TANK_KEY));
-        input.read(ITEMS_KEY, ItemStack.OPTIONAL_CODEC.listOf()).ifPresent(items -> bcqf$load(bcqf$getInventory(), items));
+        input.read(ITEMS_KEY, ItemStack.OPTIONAL_CODEC.listOf()).ifPresent(items -> {
+            // Worlds from the first build had a bigger inventory: keep a larger container so nothing is lost;
+            // the screen shows the first 9 slots, pipes and importers still reach all of them.
+            int used = items.size();
+            while (used > INVENTORY_SLOTS && items.get(used - 1).isEmpty()) {
+                used--;
+            }
+            if (used > INVENTORY_SLOTS) {
+                bcqf$inventory = bcqf$container(used);
+            }
+            bcqf$load(bcqf$getInventory(), items);
+        });
         input.read(UPGRADES_KEY, ItemStack.OPTIONAL_CODEC.listOf()).ifPresent(items -> bcqf$load(bcqf$getUpgrades(), items));
     }
 

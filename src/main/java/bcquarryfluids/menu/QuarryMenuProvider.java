@@ -1,6 +1,5 @@
 package bcquarryfluids.menu;
 
-import bcquarryfluids.Config;
 import bcquarryfluids.MultiFluidTank;
 import bcquarryfluids.QuarryExtras;
 import net.fabricmc.fabric.api.menu.v1.ExtendedMenuProvider;
@@ -18,6 +17,8 @@ import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.level.Level;
 
 public record QuarryMenuProvider(Level level, BlockPos pos, QuarryExtras quarry) implements ExtendedMenuProvider<QuarryMenuData> {
+    private static final long MB = FluidConstants.BUCKET / 1000;
+
     @Override
     public QuarryMenuData getScreenOpeningData(ServerPlayer player) {
         return data();
@@ -25,8 +26,7 @@ public record QuarryMenuProvider(Level level, BlockPos pos, QuarryExtras quarry)
 
     private QuarryMenuData data() {
         MultiFluidTank tank = quarry.bcqf$getTank();
-        return new QuarryMenuData(pos, quarry.bcqf$getInventory().getContainerSize() / 9, tank.slotCount(),
-            (int) (tank.capacity() / (FluidConstants.BUCKET / 1000)));
+        return new QuarryMenuData(pos, tank.slotCount(), (int) (tank.capacity() / MB));
     }
 
     @Override
@@ -48,7 +48,7 @@ public record QuarryMenuProvider(Level level, BlockPos pos, QuarryExtras quarry)
             if (index % 2 == 0) {
                 return slot.isResourceBlank() ? -1 : BuiltInRegistries.FLUID.getId(slot.variant.getFluid());
             }
-            return (int) (slot.amount * 1000 / FluidConstants.BUCKET);
+            return (int) (slot.amount / MB);
         }
 
         @Override
@@ -60,10 +60,5 @@ public record QuarryMenuProvider(Level level, BlockPos pos, QuarryExtras quarry)
         public int getCount() {
             return tank.slotCount() * 2;
         }
-    }
-
-    /** Capacity per slot in mB, exposed for the config-independent client. */
-    public static int capacityMb() {
-        return Config.tankCapacityMb();
     }
 }
