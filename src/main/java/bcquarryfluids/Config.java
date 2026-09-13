@@ -27,7 +27,7 @@ public final class Config {
 
     private static volatile FluidMode mode = FluidMode.COLLECT;
     private static volatile int tankCapacityMb = 16000;
-    private static volatile int fluidSlots = 6;
+    private static volatile int fluidSlots = 4;
 
     private Config() {
     }

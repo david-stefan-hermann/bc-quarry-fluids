@@ -24,6 +24,22 @@ dependencies {
     }
 }
 
+// `./gradlew runClient -PdevScreenshot` joins the dev server on localhost:25598, opens the quarry menu at
+// 0,-60,0, saves screenshots/bcqf-quarry.png and quits (see BcQuarryFluids.SCREENSHOT_PROPERTY).
+if (project.hasProperty('devScreenshot')) {
+    loom {
+        runs {
+            client {
+                vmArg "-Dbcqf.screenshot=0,-60,0"
+                programArgs "--quickPlayMultiplayer", "localhost:25598", "--width", "1280", "--height", "720"
+            }
+            server {
+                vmArg "-Dbcqf.screenshot=0,-60,0"
+            }
+        }
+    }
+}
+
 processResources {
     inputs.property "version", project.version
     inputs.property "loader_version", project.loader_version

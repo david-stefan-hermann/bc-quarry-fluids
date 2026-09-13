@@ -35,7 +35,8 @@ public class QuarryMenu extends AbstractContainerMenu {
     public static final int TANK_X = 68;
     public static final int TANK_Y = 17;
     public static final int TANK_WIDTH = 100;
-    public static final int TANK_HEIGHT = 54;
+    /** Same height as BuildCraft's own tank gauge (its overlay is 16 x 64). */
+    public static final int TANK_HEIGHT = 64;
     public static final int PLAYER_Y = 84;
 
     public final QuarryMenuData data;

@@ -20,17 +20,19 @@ import java.util.Optional;
 
 /**
  * Draws everything with plain rectangles, so no texture is needed: the dispenser-sized main panel with the 3 x 3
- * grid and the tank reservoirs, plus the Refined-Storage-style upgrade side panel on the right.
+ * grid and BuildCraft-style tank gauges, plus the Refined-Storage-style upgrade side panel on the right. Panel
+ * corners follow the vanilla container texture pixel for pixel (transparent corner, 1 px black border, 2 px
+ * highlight / shadow).
  */
 public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
     private static final int PANEL = 0xFFC6C6C6;
-    private static final int DARK = 0xFF373737;
+    private static final int BORDER = 0xFF000000;
+    private static final int SLOT_DARK = 0xFF373737;
     private static final int SHADOW = 0xFF555555;
     private static final int LIGHT = 0xFFFFFFFF;
     private static final int SLOT = 0xFF8B8B8B;
-    private static final int RESERVOIR_BG = 0x38000000;
-    private static final int RESERVOIR_BORDER = 0xA0373737;
-    private static final int GAP = 5;
+    private static final int TICK = 0xFF000000;
+    private static final int GAUGE_MAX_WIDTH = 16;
 
     public QuarryScreen(QuarryMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title, QuarryMenu.TOTAL_WIDTH, QuarryMenu.MAIN_HEIGHT);
@@ -45,6 +47,24 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
         titleLabelY = 6;
         inventoryLabelX = 8;
         inventoryLabelY = QuarryMenu.PLAYER_Y - 12;
+    }
+
+    /** Dev aid (see {@link bcquarryfluids.BcQuarryFluids#SCREENSHOT_PROPERTY}): save a screenshot, then quit. */
+    private int screenshotTicks = 0;
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        if (System.getProperty(bcquarryfluids.BcQuarryFluids.SCREENSHOT_PROPERTY) == null) {
+            return;
+        }
+        screenshotTicks++;
+        if (screenshotTicks == 40) {
+            net.minecraft.client.Screenshot.grab(minecraft.gameDirectory, "bcqf-quarry.png", minecraft.gameRenderer.mainRenderTarget(), 1,
+                message -> bcquarryfluids.BcQuarryFluids.LOGGER.info("Screenshot: {}", message.getString()));
+        } else if (screenshotTicks == 80) {
+            minecraft.stop();
+        }
     }
 
     @Override
@@ -63,44 +83,40 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
             }
         }
 
-        List<Component> tankTooltip = drawReservoirs(graphics, mouseX, mouseY);
-        if (tankTooltip != null) {
-            tooltip = tankTooltip;
+        List<Component> gaugeTooltip = drawGauges(graphics, mouseX, mouseY);
+        if (gaugeTooltip != null) {
+            tooltip = gaugeTooltip;
         }
         if (tooltip != null) {
             graphics.setTooltipForNextFrame(font, tooltip, Optional.empty(), mouseX, mouseY);
         }
     }
 
-    /** One reservoir per tank slot in a 2-row grid right of the item grid; returns the tooltip of the hovered one. */
-    private List<Component> drawReservoirs(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    /** One BuildCraft-style vertical gauge per tank slot, spread over the area right of the item grid. */
+    private List<Component> drawGauges(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         int slots = menu.data.fluidSlots();
         int capacity = Math.max(1, menu.data.capacityMb());
-        int rows = slots >= 2 ? 2 : 1;
-        int cols = (slots + rows - 1) / rows;
-        int cellW = (QuarryMenu.TANK_WIDTH - (cols - 1) * GAP) / cols;
-        int cellH = (QuarryMenu.TANK_HEIGHT - (rows - 1) * GAP) / rows;
+        int gaugeW = Math.min(GAUGE_MAX_WIDTH, (QuarryMenu.TANK_WIDTH - 4 * (slots - 1)) / slots);
+        int gap = slots > 1 ? (QuarryMenu.TANK_WIDTH - gaugeW * slots) / (slots - 1) : 0;
+        int gaugeH = QuarryMenu.TANK_HEIGHT;
         List<Component> tooltip = null;
 
         for (int i = 0; i < slots; i++) {
-            int x = leftPos + QuarryMenu.TANK_X + (i % cols) * (cellW + GAP);
-            int y = topPos + QuarryMenu.TANK_Y + (i / cols) * (cellH + GAP);
-            graphics.fill(x, y, x + cellW, y + cellH, RESERVOIR_BG);
-            graphics.fill(x, y, x + cellW, y + 1, RESERVOIR_BORDER);
-            graphics.fill(x, y + cellH - 1, x + cellW, y + cellH, RESERVOIR_BORDER);
-            graphics.fill(x, y, x + 1, y + cellH, RESERVOIR_BORDER);
-            graphics.fill(x + cellW - 1, y, x + cellW, y + cellH, RESERVOIR_BORDER);
-
+            int x = leftPos + QuarryMenu.TANK_X + i * (gaugeW + gap);
+            int y = topPos + QuarryMenu.TANK_Y;
             int fluidId = menu.tankFluidId(i);
             int amount = menu.tankAmountMb(i);
             Fluid fluid = fluidId < 0 ? Fluids.EMPTY : BuiltInRegistries.FLUID.byId(fluidId);
             boolean filled = fluid != Fluids.EMPTY && amount > 0;
+
+            // fluid level on the bare panel (no frame, no background), BuildCraft's scale on top of it
             if (filled) {
-                int inner = cellH - 4;
-                int level = Math.max(1, Math.min(inner, (int) ((long) inner * amount / capacity)));
-                graphics.fill(x + 2, y + 2 + inner - level, x + cellW - 2, y + cellH - 2, fluidColor(fluid));
+                int level = Math.max(1, Math.min(gaugeH, (int) ((long) gaugeH * amount / capacity)));
+                graphics.fill(x, y + gaugeH - level, x + gaugeW, y + gaugeH, fluidColor(fluid));
             }
-            if (mouseX >= x && mouseX < x + cellW && mouseY >= y && mouseY < y + cellH) {
+            drawScale(graphics, x, y, gaugeH, gaugeW);
+
+            if (mouseX >= x && mouseX < x + gaugeW && mouseY >= y && mouseY < y + gaugeH) {
                 tooltip = filled
                     ? List.of(FluidVariantAttributes.getName(FluidVariant.of(fluid)), Component.literal(amount + " / " + capacity + " mB"))
                     : List.of(Component.translatable("gui.bcquarryfluids.tank_empty"), Component.literal("0 / " + capacity + " mB"));
@@ -109,21 +125,58 @@ public class QuarryScreen extends AbstractContainerScreen<QuarryMenu> {
         return tooltip;
     }
 
+    /**
+     * BuildCraft's tank overlay, redrawn in black: a tick every 4 px, 5 px long; 8 px at the quarter marks,
+     * the full width at the half mark and 7 px at the top.
+     */
+    private static void drawScale(GuiGraphicsExtractor graphics, int x, int y, int height, int width) {
+        for (int row = 0; row < height; row += 4) {
+            int length;
+            if (row == height / 2) {
+                length = width;
+            } else if (row == height / 4 || row == height * 3 / 4) {
+                length = 8;
+            } else if (row == 0) {
+                length = 7;
+            } else {
+                length = 5;
+            }
+            graphics.fill(x, y + row, x + Math.min(length, width), y + row + 1, TICK);
+        }
+    }
+
+    /** Vanilla container panel: transparent corner pixels, 1 px black border, 2 px white highlight, 2 px shadow. */
     private static void drawPanel(GuiGraphicsExtractor graphics, int x0, int y0, int w, int h) {
         int x1 = x0 + w;
         int y1 = y0 + h;
-        graphics.fill(x0, y0, x1, y1, DARK);
-        graphics.fill(x0 + 1, y0 + 1, x1 - 1, y1 - 1, PANEL);
-        graphics.fill(x0 + 1, y0 + 1, x1 - 2, y0 + 2, LIGHT);
-        graphics.fill(x0 + 1, y0 + 1, x0 + 2, y1 - 2, LIGHT);
-        graphics.fill(x0 + 2, y1 - 2, x1 - 1, y1 - 1, SHADOW);
-        graphics.fill(x1 - 2, y0 + 2, x1 - 1, y1 - 1, SHADOW);
+        // border (corners left out: the two outermost pixels of each corner stay transparent)
+        graphics.fill(x0 + 2, y0, x1 - 2, y0 + 1, BORDER);
+        graphics.fill(x0 + 2, y1 - 1, x1 - 2, y1, BORDER);
+        graphics.fill(x0, y0 + 2, x0 + 1, y1 - 2, BORDER);
+        graphics.fill(x1 - 1, y0 + 2, x1, y1 - 2, BORDER);
+        graphics.fill(x0 + 1, y0 + 1, x0 + 2, y0 + 2, BORDER);
+        graphics.fill(x1 - 2, y0 + 1, x1 - 1, y0 + 2, BORDER);
+        graphics.fill(x0 + 1, y1 - 2, x0 + 2, y1 - 1, BORDER);
+        graphics.fill(x1 - 2, y1 - 2, x1 - 1, y1 - 1, BORDER);
+        // face
+        graphics.fill(x0 + 2, y0 + 1, x1 - 2, y1 - 1, PANEL);
+        graphics.fill(x0 + 1, y0 + 2, x1 - 1, y1 - 2, PANEL);
+        // highlight: two rows at the top, two columns on the left, with the vanilla inner rounding
+        graphics.fill(x0 + 2, y0 + 1, x1 - 3, y0 + 2, LIGHT);
+        graphics.fill(x0 + 1, y0 + 2, x1 - 3, y0 + 3, LIGHT);
+        graphics.fill(x0 + 1, y0 + 3, x0 + 3, y1 - 3, LIGHT);
+        graphics.fill(x0 + 3, y0 + 3, x0 + 4, y0 + 4, LIGHT);
+        // shadow: two rows at the bottom, two columns on the right
+        graphics.fill(x0 + 3, y1 - 2, x1 - 2, y1 - 1, SHADOW);
+        graphics.fill(x0 + 3, y1 - 3, x1 - 1, y1 - 2, SHADOW);
+        graphics.fill(x1 - 3, y0 + 3, x1 - 1, y1 - 3, SHADOW);
+        graphics.fill(x1 - 4, y1 - 4, x1 - 3, y1 - 3, SHADOW);
     }
 
     private static void drawSlot(GuiGraphicsExtractor graphics, int x, int y) {
         graphics.fill(x, y, x + 18, y + 18, SLOT);
-        graphics.fill(x, y, x + 17, y + 1, DARK);
-        graphics.fill(x, y, x + 1, y + 17, DARK);
+        graphics.fill(x, y, x + 17, y + 1, SLOT_DARK);
+        graphics.fill(x, y, x + 1, y + 17, SLOT_DARK);
         graphics.fill(x + 1, y + 17, x + 18, y + 18, LIGHT);
         graphics.fill(x + 17, y + 1, x + 18, y + 18, LIGHT);
     }
