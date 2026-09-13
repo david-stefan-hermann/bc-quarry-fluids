@@ -1,6 +1,10 @@
 # BuildCraft Quarry Extras
 
+<img src="src/main/resources/assets/bcquarryfluids/icon.png" alt="logo" width="96" align="right">
+
 Fabric add-on for [BuildCraft Refabricated](https://modrinth.com/mod/buildcraftrefabricated) (Minecraft 26.2). It changes nothing in the BuildCraft jar; everything is done with Mixins from a separate jar.
+
+![Quarry GUI](docs/quarry-gui.png)
 
 ## What it adds to the quarry
 
@@ -22,9 +26,11 @@ Breaking the quarry drops the inventory and the upgrades; fluid in the tank is l
 | `tankCapacityMb` | `16000` | capacity of each tank slot |
 | `fluidSlots` | `6` | different fluids the tank holds at once (1-8) |
 
-## Requirements
+## Requirements and installation
 
 Minecraft 26.2, Fabric Loader 0.19.3+, Fabric API, BuildCraft Refabricated 26.7.27+mc26.2 (the jar the mixins were written against). Refined Storage is optional and only needed for the upgrades.
+
+Download `bc-quarry-fluids-<version>.jar` from the [releases](../../releases) and put it into `mods/` next to the unmodified BuildCraft Refabricated jar (server and client).
 
 ## Building
 

@@ -11,6 +11,7 @@
     "sources": "https://github.com/david-stefan-hermann/bc-quarry-fluids"
   },
   "license": "MIT",
+  "icon": "assets/bcquarryfluids/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
