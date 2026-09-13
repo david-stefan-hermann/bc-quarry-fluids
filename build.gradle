@@ -1,5 +1,6 @@
 plugins {
     id 'net.fabricmc.fabric-loom' version '1.17.0-alpha.7'
+    id 'me.modmuss50.mod-publish-plugin' version '1.0.0'
 }
 
 version = project.mod_version
@@ -83,4 +84,50 @@ jar {
     from("LICENSE") {
         rename { "${it}_${project.archives_base_name}" }
     }
+}
+
+// `./gradlew publishMods` uploads build/libs/<jar> to CurseForge and Modrinth. Tokens and project ids live in
+// ~/.gradle/gradle.properties (bcqf.curseforge.token / bcqf.curseforge.projectId / bcqf.modrinth.token /
+// bcqf.modrinth.projectId), never in the repository. The changelog is the top section of CHANGELOG.md.
+publishMods {
+    file = tasks.named('jar').flatMap { it.archiveFile }
+    changelog = provider { topChangelogSection() }
+    type = STABLE
+    displayName = "BuildCraft Quarry Extras ${project.version}"
+    version = project.version.toString()
+    modLoaders.add("fabric")
+
+    curseforge {
+        accessToken = providers.gradleProperty("bcqf.curseforge.token")
+        projectId = providers.gradleProperty("bcqf.curseforge.projectId")
+        minecraftVersions.add(project.minecraft_version)
+        javaVersions.add(JavaVersion.VERSION_25)
+        clientRequired = true
+        serverRequired = true
+        requires("buildcraftrefabricated", "fabric-api")
+        optional("refined-storage")
+    }
+    modrinth {
+        accessToken = providers.gradleProperty("bcqf.modrinth.token")
+        projectId = providers.gradleProperty("bcqf.modrinth.projectId")
+        minecraftVersions.add(project.minecraft_version)
+        requires("buildcraftrefabricated", "fabric-api")
+        optional("refined-storage")
+    }
+}
+
+/** First "## " section of CHANGELOG.md, without its heading. */
+String topChangelogSection() {
+    def lines = file("CHANGELOG.md").readLines()
+    def out = []
+    boolean inSection = false
+    for (line in lines) {
+        if (line.startsWith("## ")) {
+            if (inSection) break
+            inSection = true
+            continue
+        }
+        if (inSection) out << line
+    }
+    return out.join("\n").trim()
 }

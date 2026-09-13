@@ -44,8 +44,12 @@ public final class BcQuarryFluids implements ModInitializer {
         return Identifier.fromNamespaceAndPath(MOD_ID, path);
     }
 
+    /** The BuildCraft Refabricated build the mixins were written and tested against. */
+    public static final String TESTED_BUILDCRAFT_VERSION = "26.7.27+mc26.2";
+
     @Override
     public void onInitialize() {
+        warnOnUntestedBuildCraft();
         Config.load();
         Registry.register(BuiltInRegistries.MENU, id("quarry"), QUARRY_MENU);
         exposeQuarryTank();
@@ -57,6 +61,21 @@ public final class BcQuarryFluids implements ModInitializer {
         });
         UseBlockCallback.EVENT.register(BcQuarryFluids::openQuarryMenu);
         registerScreenshotHook();
+    }
+
+    /**
+     * The add-on hooks private methods of BuildCraft's quarry, so an untested BuildCraft build may break it. Say so
+     * loudly in the log instead of leaving people with a bare mixin error.
+     */
+    private static void warnOnUntestedBuildCraft() {
+        net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer("buildcraftrefabricated").ifPresent(container -> {
+            String installed = container.getMetadata().getVersion().getFriendlyString();
+            if (!TESTED_BUILDCRAFT_VERSION.equals(installed)) {
+                LOGGER.warn("BuildCraft Quarry Extras was tested with BuildCraft Refabricated {} but {} is installed. "
+                    + "If the quarry misbehaves or the game crashes in TileQuarry, check https://github.com/david-stefan-hermann/bc-quarry-fluids/releases for a matching build.",
+                    TESTED_BUILDCRAFT_VERSION, installed);
+            }
+        });
     }
 
     /** Right-click on a quarry opens the inventory / tank screen, unless sneaking or holding a BuildCraft wrench. */
