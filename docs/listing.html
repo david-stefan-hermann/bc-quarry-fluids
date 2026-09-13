@@ -1,0 +1,15 @@
+<p>Add-on for <a href="https://www.curseforge.com/minecraft/mc-mods/buildcraftrefabricated"><strong>BuildCraft Refabricated</strong></a> (Fabric, Minecraft 26.2). It teaches the quarry a few things the classic one never learned, without touching the BuildCraft jar.</p>
+<p><img src="https://raw.githubusercontent.com/david-stefan-hermann/bc-quarry-fluids/main/docs/quarry-gui.png" alt="Quarry GUI"></p>
+<h2>What the quarry gets</h2>
+<p><strong>Fluids are pumped, not skipped.</strong> When the drill reaches a fluid source, the quarry collects the connected sources of that fluid on the layer and pumps the whole pool at once. Pumping in one tick is what beats vanilla "infinite water"; nothing can flow back into the gaps. Water, lava, BuildCraft oil, any mod fluid. Flowing fluid is ignored and drains by itself.</p>
+<p><strong>A multi-fluid tank.</strong> Four slots of 16 buckets by default, one fluid per slot. The tank pushes into adjacent fluid pipes and tanks and can be pulled from by Refined Storage importers and external storages or anything else that speaks the Fabric fluid API. When the tank is full the quarry waits, like the BuildCraft pump. Prefer to just get rid of the fluid? Set <code>mode</code> to <code>VOID</code>.</p>
+<p><strong>Its own inventory.</strong> Mined items land in a 3 x 3 inventory inside the quarry first. Only the overflow goes to neighbours or the ground as before. Pipes and importers can extract from it.</p>
+<p><strong>Refined Storage upgrades.</strong> Four upgrade slots take RS Fortune I-III and Silk Touch upgrades. The highest fortune level (or silk touch) is applied to every block the quarry breaks.</p>
+<p><strong>A GUI.</strong> Right-click the quarry: inventory, BuildCraft-style gauges with the real fluid textures, upgrade slots in a Refined-Storage-style side panel.</p>
+<p><strong>No skipped blocks.</strong> Anything placed into the already mined pit is found by a top-down scan and mined before the drill continues, highest block first, also after the quarry has finished.</p>
+<h2>Config</h2>
+<p><code>config/bcquarryfluids.json</code>: <code>mode</code> (<code>COLLECT</code> / <code>VOID</code> / <code>IGNORE</code>), <code>tankCapacityMb</code>, <code>fluidSlots</code> (1-8), <code>pumpMjPerBucket</code>.</p>
+<h2>Requirements</h2>
+<p>Minecraft 26.2, Fabric Loader, Fabric API and <strong>BuildCraft Refabricated 26.7.27+mc26.2</strong> (the build the mixins were tested with; other builds log a warning). Refined Storage is optional and only needed for the upgrades. Install on server and client.</p>
+<h2>Source</h2>
+<p>MIT, on <a href="https://github.com/david-stefan-hermann/bc-quarry-fluids">GitHub</a>. Issues and ideas welcome there.</p>
