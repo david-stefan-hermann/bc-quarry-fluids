@@ -13,7 +13,7 @@ Fabric add-on for [BuildCraft Refabricated](https://modrinth.com/mod/buildcraftr
 - **Own inventory.** Mined items land in the quarry's 3 x 3 inventory first. Only the overflow goes to neighbours or the ground as before. Pipes and importers can extract from the quarry.
 - **Upgrade slots.** Four slots in a Refined-Storage-style side panel accept RS's `fortune_1/2/3_upgrade` and `silk_touch_upgrade`. The highest fortune level (or silk touch, which wins) is applied to every block the quarry breaks.
 - **GUI.** Right-click the quarry (any item except a BuildCraft wrench): the 3 x 3 inventory, one BuildCraft-style gauge per tank slot showing the fluid's real texture (hover for name and amount), upgrade slots in the side panel. Shift-click moves items, upgrades jump into the upgrade slots.
-- **No skipped columns.** Upstream skips a whole column when a block was placed above it after that layer was mined. The add-on mines that block first, then continues downwards.
+- **Blocks placed in the pit come first.** The already mined part of the pit is scanned top-down (a few thousand blocks per tick, so it is cheap even for big quarries). Anything minable found there, fluid sources included, is mined before the drill continues downwards, highest block first, also after the quarry has finished. Flowing fluid is ignored; it drains once its source is gone.
 
 Breaking the quarry drops the inventory and the upgrades; fluid in the tank is lost.
 

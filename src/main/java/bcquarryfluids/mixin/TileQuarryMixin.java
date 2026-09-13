@@ -100,6 +100,11 @@ public abstract class TileQuarryMixin implements QuarryExtras {
             return; // no fluid here, upstream logic applies
         }
         BlockState state = level.getBlockState(pos);
+        if (state.getBlock() instanceof LiquidBlock && !state.getFluidState().isSource()) {
+            // flowing fluid: nothing to take, and it would just flow back; the drill passes through it
+            cir.setReturnValue(false);
+            return;
+        }
         if (state.getDestroySpeed(level, pos) < 0.0F) {
             cir.setReturnValue(false);
             return;
@@ -107,27 +112,106 @@ public abstract class TileQuarryMixin implements QuarryExtras {
         cir.setReturnValue(!(level instanceof ServerLevel serverLevel && !BlockUtil.canMachineBreak(serverLevel, pos, self.getOwner())));
     }
 
-    /** Pure fluid blocks must stop the mining iterator instead of being "passable", otherwise they are skipped. */
+    /** Fluid source blocks must stop the mining iterator instead of being "passable", otherwise they are skipped. */
     @Inject(method = "canMoveThrough", at = @At("HEAD"), cancellable = true)
-    private void bcqf$fluidsAreNotPassable(BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
+    private void bcqf$sourcesAreNotPassable(BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
         if (Config.mode() == FluidMode.IGNORE) {
             return;
         }
         TileQuarry self = (TileQuarry) (Object) this;
         Level level = self.getLevel();
-        if (level != null && level.getBlockState(pos).getBlock() instanceof LiquidBlock) {
+        if (level == null) {
+            return;
+        }
+        BlockState state = level.getBlockState(pos);
+        if (state.getBlock() instanceof LiquidBlock && state.getFluidState().isSource()) {
             cir.setReturnValue(false);
         }
     }
 
-    /** A minable block sitting above the iterator's current column (placed after that layer was mined). */
+    /**
+     * A minable block inside the already mined part of the pit (placed after that layer was mined). Found by a
+     * top-down scan, so the highest such block is always handled first; that keeps water from being released into
+     * the hole by mining something underneath it.
+     */
     @Unique
     private BlockPos bcqf$blocker;
+    /** Scan cursor over the mined region (top layer first); {@code bcqf$scanY == Integer.MIN_VALUE} = idle. */
+    @Unique
+    private int bcqf$scanX;
+    @Unique
+    private int bcqf$scanY = Integer.MIN_VALUE;
+    @Unique
+    private int bcqf$scanZ;
+    @Unique
+    private int bcqf$scanCooldown;
+    private static final int SCAN_BUDGET_PER_TICK = 4096;
+    private static final int SCAN_COOLDOWN_TICKS = 40;
+
+    /** Server tick: advance the top-down scan of the mined region by a fixed budget of block checks. */
+    @Inject(method = "tick", at = @At("HEAD"))
+    private void bcqf$scanMinedRegion(CallbackInfo ci) {
+        TileQuarry self = (TileQuarry) (Object) this;
+        Level level = self.getLevel();
+        if (level == null || level.isClientSide()) {
+            return;
+        }
+        TileQuarryAccessor acc = (TileQuarryAccessor) this;
+        Box box = acc.bcqf$getMiningBox();
+        if (box == null || !box.isInitialized()) {
+            return;
+        }
+        if (bcqf$blocker != null) {
+            if (!acc.bcqf$canMoveThrough(bcqf$blocker) && acc.bcqf$canMine(bcqf$blocker)) {
+                return; // still there, the drill is working on it
+            }
+            bcqf$blocker = null;
+            bcqf$scanY = Integer.MIN_VALUE; // something changed: restart from the top
+            bcqf$scanCooldown = 0;
+        }
+        if (bcqf$scanCooldown > 0) {
+            bcqf$scanCooldown--;
+            return;
+        }
+        BlockPos min = box.min();
+        BlockPos max = box.max();
+        BoxIterator iterator = acc.bcqf$getBoxIterator();
+        BlockPos current = iterator != null && iterator.hasNext() ? iterator.getCurrent() : null;
+        // everything above the layer the drill is working on counts as "already mined"; a finished pit entirely
+        int floorY = current != null ? current.getY() : min.getY() - 1;
+        if (bcqf$scanY == Integer.MIN_VALUE) {
+            bcqf$scanY = max.getY();
+            bcqf$scanX = min.getX();
+            bcqf$scanZ = min.getZ();
+        }
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        for (int budget = SCAN_BUDGET_PER_TICK; budget > 0; budget--) {
+            if (bcqf$scanY <= floorY) {
+                // clean pass finished: nothing new above the drill, look again in a moment
+                bcqf$scanY = Integer.MIN_VALUE;
+                bcqf$scanCooldown = SCAN_COOLDOWN_TICKS;
+                return;
+            }
+            pos.set(bcqf$scanX, bcqf$scanY, bcqf$scanZ);
+            if (!acc.bcqf$canMoveThrough(pos) && acc.bcqf$canMine(pos)) {
+                bcqf$blocker = pos.immutable();
+                bcqf$scanY = Integer.MIN_VALUE;
+                return;
+            }
+            if (++bcqf$scanX > max.getX()) {
+                bcqf$scanX = min.getX();
+                if (++bcqf$scanZ > max.getZ()) {
+                    bcqf$scanZ = min.getZ();
+                    bcqf$scanY--;
+                }
+            }
+        }
+    }
 
     /**
      * Upstream skips a column entirely when something above the current block is in the way
-     * ({@code canMoveDownTo} fails, iterator advances). Instead, take the topmost minable block of that column
-     * as the next target, so blocks placed on an already mined layer are removed before the drill goes deeper.
+     * ({@code canMoveDownTo} fails, iterator advances). With a blocker pending the iterator stays put; otherwise a
+     * block above the current column becomes the blocker immediately (the scan would find it a moment later anyway).
      */
     @Inject(method = "advancePastNonWorkableBlocks", at = @At("HEAD"), cancellable = true)
     private void bcqf$mineBlockersFirst(CallbackInfo ci) {
@@ -138,10 +222,7 @@ public abstract class TileQuarryMixin implements QuarryExtras {
         }
         ci.cancel();
         if (bcqf$blocker != null) {
-            if (!self.bcqf$canMoveThrough(bcqf$blocker) && self.bcqf$canMine(bcqf$blocker)) {
-                return; // still there, keep working on it
-            }
-            bcqf$blocker = null;
+            return;
         }
         Box box = self.bcqf$getMiningBox();
         while (iterator.hasNext()) {
@@ -178,6 +259,12 @@ public abstract class TileQuarryMixin implements QuarryExtras {
     @Redirect(method = "tick", at = @At(value = "INVOKE", target = "Lbuildcraft/lib/misc/data/BoxIterator;getCurrent()Lnet/minecraft/core/BlockPos;"))
     private BlockPos bcqf$currentOrBlocker(BoxIterator iterator) {
         return bcqf$blocker != null ? bcqf$blocker : iterator.getCurrent();
+    }
+
+    /** A pending blocker is work even when the pit is finished, so a finished quarry still cleans up placed blocks. */
+    @Redirect(method = "tick", at = @At(value = "INVOKE", target = "Lbuildcraft/lib/misc/data/BoxIterator;hasNext()Z"))
+    private boolean bcqf$hasNextOrBlocker(BoxIterator iterator) {
+        return bcqf$blocker != null || iterator.hasNext();
     }
 
     /** Push collected fluid into neighbouring pipes and tanks every tick, like the BuildCraft pump does. */

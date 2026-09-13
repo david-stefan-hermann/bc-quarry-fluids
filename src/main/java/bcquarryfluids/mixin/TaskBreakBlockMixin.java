@@ -39,10 +39,10 @@ import java.util.Optional;
 /**
  * Two jobs when a break task completes:
  * <ol>
- *   <li>Fluid blocks: the block under the drill is removed, one at a time like any other block. A source block is
- *       worth one bucket; in COLLECT mode that bucket goes into the quarry tank, and if it does not fit the task
- *       reports failure without advancing, so the quarry retries until the tank is emptied (like the BuildCraft
- *       pump). Flowing fluid is just cleared.</li>
+ *   <li>Fluid source blocks: removed one at a time like any other block, worth one bucket. In COLLECT mode that
+ *       bucket goes into the quarry tank, and if it does not fit the task reports failure without advancing, so the
+ *       quarry retries until the tank is emptied (like the BuildCraft pump). Flowing fluid is ignored: the drill
+ *       passes through it and it drains once its source is gone.</li>
  *   <li>Solid blocks: the pickaxe BuildCraft breaks with gets the fortune / silk touch level of the installed
  *       Refined Storage upgrades, and the drops go into the quarry inventory before anything reaches neighbours.</li>
  * </ol>
@@ -65,13 +65,16 @@ public abstract class TaskBreakBlockMixin {
         if (!(level.getBlockState(breakPos).getBlock() instanceof LiquidBlock)) {
             return; // solid or waterlogged block: upstream breaks it, the RETURN hook below cleans up leftovers
         }
+        FluidState fluidState = level.getFluidState(breakPos);
+        if (!fluidState.isSource()) {
+            return; // flowing fluid is not minable (canMine says no), upstream just advances past it
+        }
 
         TileQuarryAccessor quarry = (TileQuarryAccessor) this$0;
         quarry.bcqf$setBlockPercentSoFar(quarry.bcqf$getBlockPercentSoFar() + (double) added / target);
         level.destroyBlockProgress(breakPos.hashCode(), breakPos, -1);
 
-        FluidState fluidState = level.getFluidState(breakPos);
-        if (Config.mode() == FluidMode.COLLECT && fluidState.isSource() && !bcqf$collect(fluidState.getType(), FluidConstants.BUCKET)) {
+        if (Config.mode() == FluidMode.COLLECT && !bcqf$collect(fluidState.getType(), FluidConstants.BUCKET)) {
             // Tank full (or holds other fluids): do not advance, upstream refunds the power, retry next tick.
             cir.setReturnValue(false);
             return;
@@ -89,10 +92,10 @@ public abstract class TaskBreakBlockMixin {
             return;
         }
         FluidState fluidState = level.getFluidState(breakPos);
-        if (fluidState.isEmpty() || !(level.getBlockState(breakPos).getBlock() instanceof LiquidBlock)) {
-            return;
+        if (!fluidState.isSource() || !(level.getBlockState(breakPos).getBlock() instanceof LiquidBlock)) {
+            return; // nothing left, or only flowing fluid that drains by itself
         }
-        if (Config.mode() == FluidMode.COLLECT && fluidState.isSource()) {
+        if (Config.mode() == FluidMode.COLLECT) {
             bcqf$collect(fluidState.getType(), FluidConstants.BUCKET); // best effort: the iterator has moved on, overflow is voided
         }
         level.setBlock(breakPos, Blocks.AIR.defaultBlockState(), 3);
