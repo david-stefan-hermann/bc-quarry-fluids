@@ -32,7 +32,7 @@ Breaking the quarry drops the inventory and the upgrades; fluid in the tank is l
 
 Minecraft 26.2, Fabric Loader 0.19.3+, Fabric API, BuildCraft Refabricated 26.7.27+mc26.2 (the jar the mixins were written against). Refined Storage is optional and only needed for the upgrades.
 
-Download `bc-quarry-fluids-<version>.jar` from the [releases](../../releases) and put it into `mods/` next to the unmodified BuildCraft Refabricated jar (server and client).
+Download `bc-quarry-fluids-<version>.jar` from [Modrinth](https://modrinth.com/mod/bc-quarry-extras), CurseForge or the [GitHub releases](../../releases) and put it into `mods/` next to the unmodified BuildCraft Refabricated jar (server and client).
 
 ## Building
 
