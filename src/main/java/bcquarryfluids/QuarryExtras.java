@@ -11,4 +11,9 @@ public interface QuarryExtras {
 
     /** Four slots for Refined Storage fortune / silk touch upgrades. */
     SimpleContainer bcqf$getUpgrades();
+
+    /** Game time before which pumping is not retried (set when the tank had no room). */
+    long bcqf$getPumpRetryAt();
+
+    void bcqf$setPumpRetryAt(long gameTime);
 }

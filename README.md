@@ -8,8 +8,8 @@ Fabric add-on for [BuildCraft Refabricated](https://modrinth.com/mod/buildcraftr
 
 ## What it adds to the quarry
 
-- **Fluids are mined away.** Water, lava, oil and any other fluid block under the drill is removed like a normal block, one block per task. Note that two neighbouring water sources re-create a source in the gap (vanilla "infinite water"), so a lake drains slowly and water from outside the frame is not stopped.
-- **Multi-fluid tank.** In `COLLECT` mode every source block yields one bucket into the quarry's tank (default 6 slots x 16 buckets, one fluid per slot). The tank pushes into adjacent fluid pipes and tanks every tick and can be pulled from by any Fabric Transfer API consumer (Refined Storage importer, external storage, ...). When the tank is full the quarry waits on that block, like the BuildCraft pump. `VOID` mode deletes the fluid instead; `IGNORE` restores upstream behaviour.
+- **Fluids are pumped away.** When the drill reaches a fluid source, the quarry flood-fills the connected sources of that fluid on that layer and pumps the whole pool at once; the task costs `pumpMjPerBucket` per source block, so big pools take longer. Pumping everything in one tick is what defeats vanilla "infinite water" (two neighbouring sources re-create the gap). Flowing fluid is ignored and drains by itself. Water flowing in from outside the frame is not stopped.
+- **Multi-fluid tank.** In `COLLECT` mode every pumped source yields one bucket into the quarry's tank (default 4 slots x 16 buckets, one fluid per slot). Only as many sources as fit are pumped; when nothing fits the quarry waits and retries every second, like the BuildCraft pump. The tank pushes into adjacent fluid pipes and tanks every tick and can be pulled from by any Fabric Transfer API consumer (Refined Storage importer, external storage, ...). `VOID` mode deletes the fluid instead; `IGNORE` restores upstream behaviour.
 - **Own inventory.** Mined items land in the quarry's 3 x 3 inventory first. Only the overflow goes to neighbours or the ground as before. Pipes and importers can extract from the quarry.
 - **Upgrade slots.** Four slots in a Refined-Storage-style side panel accept RS's `fortune_1/2/3_upgrade` and `silk_touch_upgrade`. The highest fortune level (or silk touch, which wins) is applied to every block the quarry breaks.
 - **GUI.** Right-click the quarry (any item except a BuildCraft wrench): the 3 x 3 inventory, one BuildCraft-style gauge per tank slot showing the fluid's real texture (hover for name and amount), upgrade slots in the side panel. Shift-click moves items, upgrades jump into the upgrade slots.
@@ -25,7 +25,8 @@ Breaking the quarry drops the inventory and the upgrades; fluid in the tank is l
 |---|---|---|
 | `mode` | `COLLECT` | `IGNORE`, `VOID` or `COLLECT` |
 | `tankCapacityMb` | `16000` | capacity of each tank slot |
-| `fluidSlots` | `6` | different fluids the tank holds at once (1-8) |
+| `fluidSlots` | `4` | different fluids the tank holds at once (1-8) |
+| `pumpMjPerBucket` | `4` | energy per source block when pumping a pool (a stone block costs about 50 MJ to mine) |
 
 ## Requirements and installation
 

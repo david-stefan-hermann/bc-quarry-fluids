@@ -28,6 +28,7 @@ public final class Config {
     private static volatile FluidMode mode = FluidMode.COLLECT;
     private static volatile int tankCapacityMb = 16000;
     private static volatile int fluidSlots = 4;
+    private static volatile int pumpMjPerBucket = 4;
 
     private Config() {
     }
@@ -42,6 +43,11 @@ public final class Config {
 
     public static int fluidSlots() {
         return fluidSlots;
+    }
+
+    /** Energy the quarry spends per source block when it pumps a connected pool (mining a stone block costs about 50 MJ). */
+    public static int pumpMjPerBucket() {
+        return pumpMjPerBucket;
     }
 
     public static void load() {
@@ -64,6 +70,7 @@ public final class Config {
             }
             tankCapacityMb = clamp(root, "tankCapacityMb", tankCapacityMb, 1000, 1_000_000);
             fluidSlots = clamp(root, "fluidSlots", fluidSlots, 1, 8);
+            pumpMjPerBucket = clamp(root, "pumpMjPerBucket", pumpMjPerBucket, 1, 1000);
         } catch (Exception e) {
             BcQuarryFluids.LOGGER.error("Failed to read {}, using defaults", path, e);
         }
@@ -80,10 +87,11 @@ public final class Config {
     private static void write(Path path) {
         JsonObject root = new JsonObject();
         root.addProperty("_comment", "mode: IGNORE (leave fluids like upstream), VOID (delete them), COLLECT (fill the quarry tank, pushed to adjacent pipes/tanks). "
-            + "tankCapacityMb per fluid slot, fluidSlots 1-8.");
+            + "tankCapacityMb per fluid slot, fluidSlots 1-8, pumpMjPerBucket = energy per source block when pumping a pool.");
         root.addProperty("mode", mode.name());
         root.addProperty("tankCapacityMb", tankCapacityMb);
         root.addProperty("fluidSlots", fluidSlots);
+        root.addProperty("pumpMjPerBucket", pumpMjPerBucket);
         try {
             Files.createDirectories(path.getParent());
             try (Writer writer = Files.newBufferedWriter(path)) {

@@ -40,6 +40,17 @@ if (project.hasProperty('devScreenshot')) {
     }
 }
 
+// `./gradlew runServer -PdevDebug` logs the add-on's blocker / pump decisions.
+if (project.hasProperty('devDebug')) {
+    loom {
+        runs {
+            server {
+                vmArg "-Dbcqf.debug=true"
+            }
+        }
+    }
+}
+
 processResources {
     inputs.property "version", project.version
     inputs.property "loader_version", project.loader_version

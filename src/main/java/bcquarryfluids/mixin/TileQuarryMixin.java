@@ -68,6 +68,19 @@ public abstract class TileQuarryMixin implements QuarryExtras {
         return bcqf$inventory;
     }
 
+    @Unique
+    private long bcqf$pumpRetryAt;
+
+    @Override
+    public long bcqf$getPumpRetryAt() {
+        return bcqf$pumpRetryAt;
+    }
+
+    @Override
+    public void bcqf$setPumpRetryAt(long gameTime) {
+        bcqf$pumpRetryAt = gameTime;
+    }
+
     @Override
     public SimpleContainer bcqf$getUpgrades() {
         if (bcqf$upgrades == null) {
@@ -145,6 +158,7 @@ public abstract class TileQuarryMixin implements QuarryExtras {
     private int bcqf$scanZ;
     @Unique
     private int bcqf$scanCooldown;
+    private static final boolean DEBUG = System.getProperty("bcqf.debug") != null;
     private static final int SCAN_BUDGET_PER_TICK = 4096;
     private static final int SCAN_COOLDOWN_TICKS = 40;
 
@@ -196,6 +210,10 @@ public abstract class TileQuarryMixin implements QuarryExtras {
             if (!acc.bcqf$canMoveThrough(pos) && acc.bcqf$canMine(pos)) {
                 bcqf$blocker = pos.immutable();
                 bcqf$scanY = Integer.MIN_VALUE;
+                if (DEBUG) {
+                    bcquarryfluids.BcQuarryFluids.LOGGER.info("[bcqf] blocker found at {} (iterator current {}, hasNext {})", bcqf$blocker,
+                        current, iterator != null && iterator.hasNext());
+                }
                 return;
             }
             if (++bcqf$scanX > max.getX()) {
@@ -258,7 +276,14 @@ public abstract class TileQuarryMixin implements QuarryExtras {
     /** While a blocker is pending, every use of the iterator position in {@code tick} targets the blocker instead. */
     @Redirect(method = "tick", at = @At(value = "INVOKE", target = "Lbuildcraft/lib/misc/data/BoxIterator;getCurrent()Lnet/minecraft/core/BlockPos;"))
     private BlockPos bcqf$currentOrBlocker(BoxIterator iterator) {
-        return bcqf$blocker != null ? bcqf$blocker : iterator.getCurrent();
+        if (bcqf$blocker != null) {
+            if (DEBUG) {
+                TileQuarry self = (TileQuarry) (Object) this;
+                bcquarryfluids.BcQuarryFluids.LOGGER.info("[bcqf] targeting blocker {} (drill {}, task {})", bcqf$blocker, self.drillPos, self.currentTask);
+            }
+            return bcqf$blocker;
+        }
+        return iterator.getCurrent();
     }
 
     /** A pending blocker is work even when the pit is finished, so a finished quarry still cleans up placed blocks. */

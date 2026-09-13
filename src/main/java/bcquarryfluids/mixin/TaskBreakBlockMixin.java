@@ -5,14 +5,17 @@ import bcquarryfluids.FluidMode;
 import bcquarryfluids.MultiFluidTank;
 import bcquarryfluids.QuarryExtras;
 import bcquarryfluids.Upgrades;
+import buildcraft.api.mj.MjAPI;
 import buildcraft.builders.tile.TileQuarry;
 import buildcraft.lib.fluid.stack.FluidStack;
 import buildcraft.lib.misc.BlockUtil;
+import buildcraft.lib.misc.data.Box;
 import com.mojang.authlib.GameProfile;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
 import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
@@ -22,6 +25,7 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.FluidState;
 import org.spongepowered.asm.mixin.Final;
@@ -32,9 +36,12 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Two jobs when a break task completes:
@@ -57,6 +64,43 @@ public abstract class TaskBreakBlockMixin {
     @Final
     private TileQuarry this$0;
 
+    /** Safety cap for the flood fill of one pool (a 256 x 256 quarry layer). */
+    private static final int MAX_POOL = 65536;
+    /** How long the quarry waits before it checks the tank again after a pool did not fit at all. */
+    private static final int PUMP_RETRY_TICKS = 20;
+
+    /** Number of connected source blocks this task pumps; computed once per task (-1 = not yet). */
+    @org.spongepowered.asm.mixin.Unique
+    private int bcqf$poolSize = -1;
+
+    /**
+     * Pump mode: a fluid source task costs {@code pumpMjPerBucket} per connected source block on that layer, so a
+     * big pool takes proportionally longer than a single block.
+     */
+    @Inject(method = "getTarget", at = @At("HEAD"), cancellable = true)
+    private void bcqf$poolTarget(CallbackInfoReturnable<Long> cir) {
+        if (Config.mode() == FluidMode.IGNORE || !(this$0.getLevel() instanceof ServerLevel level)) {
+            return;
+        }
+        BlockState state = level.getBlockState(breakPos);
+        if (!(state.getBlock() instanceof LiquidBlock) || !state.getFluidState().isSource()) {
+            return;
+        }
+        if (level.getGameTime() < ((QuarryExtras) this$0).bcqf$getPumpRetryAt()) {
+            cir.setReturnValue((long) Config.pumpMjPerBucket() * MjAPI.MJ); // waiting for tank room: cheap retry
+            return;
+        }
+        if (bcqf$poolSize < 0) {
+            bcqf$poolSize = bcqf$connectedSources(level, breakPos, state.getFluidState().getType()).size();
+        }
+        cir.setReturnValue((long) Math.max(1, bcqf$poolSize) * Config.pumpMjPerBucket() * MjAPI.MJ);
+    }
+
+    /**
+     * Pump mode: when the task completes, the whole connected pool on this layer is removed in one tick (as far as
+     * the tank has room), so neighbouring sources cannot re-create the gaps ("infinite water"). If nothing fits the
+     * task reports failure without advancing and the quarry waits, like the BuildCraft pump.
+     */
     @Inject(method = "finish", at = @At("HEAD"), cancellable = true)
     private void bcqf$finishFluidBlock(long added, long target, CallbackInfoReturnable<Boolean> cir) {
         if (Config.mode() == FluidMode.IGNORE || !(this$0.getLevel() instanceof ServerLevel level)) {
@@ -71,18 +115,71 @@ public abstract class TaskBreakBlockMixin {
         }
 
         TileQuarryAccessor quarry = (TileQuarryAccessor) this$0;
+        QuarryExtras extras = (QuarryExtras) this$0;
         quarry.bcqf$setBlockPercentSoFar(quarry.bcqf$getBlockPercentSoFar() + (double) added / target);
         level.destroyBlockProgress(breakPos.hashCode(), breakPos, -1);
-
-        if (Config.mode() == FluidMode.COLLECT && !bcqf$collect(fluidState.getType(), FluidConstants.BUCKET)) {
-            // Tank full (or holds other fluids): do not advance, upstream refunds the power, retry next tick.
-            cir.setReturnValue(false);
+        if (level.getGameTime() < extras.bcqf$getPumpRetryAt()) {
+            cir.setReturnValue(false); // still waiting for tank room, do not rescan the pool every tick
             return;
         }
-        level.setBlock(breakPos, Blocks.AIR.defaultBlockState(), 3);
+
+        Fluid fluid = fluidState.getType();
+        List<BlockPos> pool = bcqf$connectedSources(level, breakPos, fluid);
+        int fit = pool.size();
+        if (Config.mode() == FluidMode.COLLECT) {
+            MultiFluidTank tank = extras.bcqf$getTank();
+            try (Transaction transaction = Transaction.openOuter()) {
+                long accepted = tank.insert(FluidVariant.of(fluid), (long) pool.size() * FluidConstants.BUCKET, transaction);
+                fit = (int) Math.min(pool.size(), accepted / FluidConstants.BUCKET);
+                if (fit == 0) {
+                    transaction.abort();
+                    extras.bcqf$setPumpRetryAt(level.getGameTime() + PUMP_RETRY_TICKS);
+                    cir.setReturnValue(false); // tank full: wait, upstream refunds the power
+                    return;
+                }
+                // commit exactly the whole buckets we are going to remove
+                transaction.abort();
+            }
+            boolean stored = bcqf$collect(fluid, (long) fit * FluidConstants.BUCKET);
+            if (System.getProperty("bcqf.debug") != null) {
+                bcquarryfluids.BcQuarryFluids.LOGGER.info("[bcqf] pump at {}: pool {}, fit {}, stored {}", breakPos, pool.size(), fit, stored);
+            }
+        }
+        for (int i = 0; i < fit; i++) {
+            level.setBlock(pool.get(i), Blocks.AIR.defaultBlockState(), 3);
+        }
         quarry.bcqf$check(breakPos);
         quarry.bcqf$advanceMiningIteratorPast(breakPos);
         cir.setReturnValue(true);
+    }
+
+    /**
+     * Flood fill over the horizontally connected source blocks of {@code fluid} on the layer of {@code start},
+     * limited to the mining box. {@code start} is always the first entry.
+     */
+    private List<BlockPos> bcqf$connectedSources(ServerLevel level, BlockPos start, Fluid fluid) {
+        Box box = ((TileQuarryAccessor) this$0).bcqf$getMiningBox();
+        List<BlockPos> found = new ArrayList<>();
+        Set<BlockPos> seen = new HashSet<>();
+        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
+        queue.add(start);
+        seen.add(start);
+        while (!queue.isEmpty() && found.size() < MAX_POOL) {
+            BlockPos pos = queue.poll();
+            BlockState state = level.getBlockState(pos);
+            FluidState fluidState = state.getFluidState();
+            if (!(state.getBlock() instanceof LiquidBlock) || !fluidState.isSource() || fluidState.getType() != fluid) {
+                continue;
+            }
+            found.add(pos);
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                BlockPos next = pos.relative(direction);
+                if (seen.add(next) && (box == null || !box.isInitialized() || box.contains(next))) {
+                    queue.add(next);
+                }
+            }
+        }
+        return found;
     }
 
     /** Breaking a waterlogged block (kelp, seagrass, slabs ...) leaves its water behind; take that too. */
