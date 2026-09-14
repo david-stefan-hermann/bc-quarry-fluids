@@ -190,9 +190,16 @@ public abstract class TileQuarryMixin implements QuarryExtras {
         BlockPos min = box.min();
         BlockPos max = box.max();
         BoxIterator iterator = acc.bcqf$getBoxIterator();
-        BlockPos current = iterator != null && iterator.hasNext() ? iterator.getCurrent() : null;
-        // everything above the layer the drill is working on counts as "already mined"; a finished pit entirely
-        int floorY = current != null ? current.getY() : min.getY() - 1;
+        // everything above the layer the drill is working on counts as "already mined"; a finished pit counts
+        // everything, but a quarry that hasn't started mining yet (still building its frame) has mined nothing.
+        int floorY;
+        if (iterator == null) {
+            floorY = max.getY();
+        } else if (iterator.hasNext()) {
+            floorY = iterator.getCurrent().getY();
+        } else {
+            floorY = min.getY() - 1;
+        }
         if (bcqf$scanY == Integer.MIN_VALUE) {
             bcqf$scanY = max.getY();
             bcqf$scanX = min.getX();
@@ -212,7 +219,7 @@ public abstract class TileQuarryMixin implements QuarryExtras {
                 bcqf$scanY = Integer.MIN_VALUE;
                 if (DEBUG) {
                     bcquarryfluids.BcQuarryFluids.LOGGER.info("[bcqf] blocker found at {} (iterator current {}, hasNext {})", bcqf$blocker,
-                        current, iterator != null && iterator.hasNext());
+                        iterator != null && iterator.hasNext() ? iterator.getCurrent() : null, iterator != null && iterator.hasNext());
                 }
                 return;
             }

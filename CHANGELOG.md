@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.5
+- Fixed the drill flying off to a far corner of the mining area (sometimes far enough to hang the quarry) right after placing a new quarry, before it had mined anything. The "placed-block scanner" mistook "not started yet" for "the whole pit is already mined" and chased a phantom blocker at the untouched far corner.
+
 ## 1.0.4
 - First public release on CurseForge and Modrinth.
 - Warns in the log when an untested BuildCraft Refabricated build is installed (tested with 26.7.27+mc26.2).
